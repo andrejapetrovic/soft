@@ -2,6 +2,9 @@ import cv2
 import numpy as np
 import os
 
+boxes = {}
+sum = 0
+
 def findLine(lowerColor, upperColor, frame):       
     mask = cv2.inRange(frame, lowerColor, upperColor)
     image = cv2.bitwise_and(src1=frame, src2=frame, mask=mask)
@@ -15,43 +18,37 @@ def findLine(lowerColor, upperColor, frame):
             #cv2.line(frame, (x1,y1), (x2,y2), (255,255,0),2)
             return [x1, y1, x2, y2]
     
-boxes = {}
-sum = 0
 def playVideo(path):
     video = cv2.VideoCapture(path)
+    
+    sum = 0 
+    boxes.clear()
 
- 
     boxId = 0
     while True:
         ret, frame = video.read()
-        
-        #plava koordinate [x1, y1, x2, y2]
-        blue = findLine(np.array([120, 0, 0], dtype = "uint8"), np.array([255, 100, 100], dtype = "uint8"), frame)
-        #zelena
-        green = findLine(np.array([0, 130, 0], dtype = "uint8"), np.array([59, 255, 50], dtype = "uint8"), frame)
-            
-        #if blue is not None:
-         #   print(blue)
 
-        #if green is not None:
-         #   print(green)
+        #plava linija - koordinate [x1, y1, x2, y2]
+        blue = findLine(np.array([120, 0, 0]), np.array([255, 100, 100]), frame)
+        #zelena
+        green = findLine(np.array([0, 130, 0]), np.array([59, 255, 50]), frame)
 
         #konture  
-        mask = cv2.inRange(frame, np.array([160, 160, 160], dtype = "uint8"), np.array([255, 255, 255], dtype = "uint8"))
+        mask = cv2.inRange(frame, np.array([160, 160, 160]), np.array([255, 255, 255]))
         image = cv2.bitwise_and(src1=frame, src2=frame, mask=mask)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
         contours, hierarchy = cv2.findContours(blur, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         #cv2.drawContours(frame, contours, -1, (255,0,0), 2)
         for contour in contours:
+            currentKey = -1;
             x, y, w, h = cv2.boundingRect(contour)
-            #print(w, h)
-            if(w>9 or h>8) and (w<25 or h<25):
+            if(w>9 or h>8) and (w<25 and h<25):
                 #geometrijski centar
                 cx = x+w*0.5
                 cy = y+h*0.5
                 dists = {}
-                currentKey = -1;
+                
                 if not boxes:
                     boxId += 1
                     #[id] = [x, y, sirina, visina, centar-x, centar-y, presekao plavu, presekao zelenu]
@@ -81,11 +78,11 @@ def playVideo(path):
                     checkIntersection(green, currentKey, frame, "green")      
 
         cv2.imshow(path, frame)
-        cv2.imshow("mask", mask)
-        key = cv2.waitKey(25)
+        #cv2.imshow("mask", mask)
+        key = cv2.waitKey(1)
         if key == 27:
             break
-       
+            
     video.release()
     cv2.destroyAllWindows()
 
@@ -93,9 +90,8 @@ def checkIntersection(line, key, frame, lineColor):
     x, y, w, h, cx, cy, passedBlue, passedGreen = boxes[key]
     #proverava se presek svih stranica kvadrata s kojim je uokvirena kontura
     #sa linijom, pocevsi od gornje stranice u smeru kazaljke na satu
-    if lineLineIntersection([x, y, x+w, y], line) or  lineLineIntersection([x+w, y, x+w, y+h], line) or lineLineIntersection([x, y+h, x+w, y+h], line) or lineLineIntersection([x, y, x, y+h], line):
+    if lineLineIntersection([x, y, x+w, y], line) or lineLineIntersection([x+w, y, x+w, y+h], line) or lineLineIntersection([x, y+h, x+w, y+h], line) or lineLineIntersection([x, y, x, y+h], line):
         if lineColor is "blue" and passedBlue == 0:
-            print(boxes[key][6])
             boxes[key][6] = 1
             cv2.putText(frame,"PLAVA", (x,y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0))
         if lineColor is "green" and passedGreen == 0:
@@ -118,9 +114,7 @@ def lineLineIntersection(l1, l2):
     return False     
 
 if __name__ == '__main__':
-    playVideo("proj-lvl3-data/video-0.avi")
-    #for filename in os.listdir("proj-lvl3-data"):
-     #   if filename.startswith("video-") and filename.endswith(".avi"):
-      #      playVideo("proj-lvl3-data/" + filename)
+    playVideo("proj-lvl3-data/video-3.avi")
+    #playVideo("proj-lvl3-data/video-0.avi")
             
         
