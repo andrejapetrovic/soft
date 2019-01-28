@@ -21,12 +21,17 @@ def findLine(lowerColor, upperColor, frame):
 def playVideo(path):
     video = cv2.VideoCapture(path)
     
+    frame_count = 0
+    num_of_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+
     sum = 0 
     boxes.clear()
 
     boxId = 0
     while True:
         ret, frame = video.read()
+
+        frame_count += 1
 
         #plava linija - koordinate [x1, y1, x2, y2]
         blue = findLine(np.array([120, 0, 0]), np.array([255, 100, 100]), frame)
@@ -79,12 +84,13 @@ def playVideo(path):
 
         cv2.imshow(path, frame)
         #cv2.imshow("mask", mask)
+        
         key = cv2.waitKey(1)
-        if key == 27:
-            break
+        if frame_count == num_of_frames or key == 27:
+            video.release()
+            cv2.destroyAllWindows()
+            return True
             
-    video.release()
-    cv2.destroyAllWindows()
 
 def checkIntersection(line, key, frame, lineColor):
     x, y, w, h, cx, cy, passedBlue, passedGreen = boxes[key]
