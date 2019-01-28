@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import os
 
 def findLine(lowerColor, upperColor, frame):       
     mask = cv2.inRange(frame, lowerColor, upperColor)
@@ -11,16 +12,15 @@ def findLine(lowerColor, upperColor, frame):
     lines = cv2.HoughLinesP(blur, 1, np.pi/180, 100, 175, 200)
     if lines is not None:
         for x1, y1, x2, y2 in lines[0]:
-            cv2.line(frame, (x1,y1), (x2,y2), (255,255,0),2)
+            #cv2.line(frame, (x1,y1), (x2,y2), (255,255,0),2)
             return [x1, y1, x2, y2]
     
+boxes = {}
+sum = 0
+def playVideo(path):
+    video = cv2.VideoCapture(path)
 
-if __name__ == '__main__':
-    video = cv2.VideoCapture("proj-lvl3-data/video-0.avi")
-
-    boxes = {}
-    intersectedBlue = {}
-    intersectedGreen = {}
+ 
     boxId = 0
     while True:
         ret, frame = video.read()
@@ -46,17 +46,17 @@ if __name__ == '__main__':
         for contour in contours:
             x, y, w, h = cv2.boundingRect(contour)
             #print(w, h)
-            if(w>9 or h>8) and (w<25 or h<26):
+            if(w>9 or h>8) and (w<25 or h<25):
                 #geometrijski centar
                 cx = x+w*0.5
                 cy = y+h*0.5
                 dists = {}
+                currentKey = -1;
                 if not boxes:
                     boxId += 1
-                    #[id] = [x, y, sirina, visina, centar-x, cenar-y]
-                    boxes[boxId] = [x, y, w, h, cx, cy]
-                    cv2.rectangle(frame,(x, y),(x+w,y+h),(0,0,255),1)
-                    cv2.putText(mask,str(boxId), (x,y), cv2.FONT_HERSHEY_SIMPLEX, 2, 255)
+                    #[id] = [x, y, sirina, visina, centar-x, centar-y, presekao plavu, presekao zelenu]
+                    boxes[boxId] = [x, y, w, h, cx, cy, 0, 0]
+                    currentKey = boxId;
                 else:
                     for key in boxes:
                         box = boxes[key]
@@ -64,25 +64,63 @@ if __name__ == '__main__':
                 
                     minDist = min(dists.values())
                         
-                    if (minDist < 20):
+                    if (minDist < 20 and minDist>5):
                         k = (list(dists.keys())[list(dists.values()).index(minDist)])
-                        boxes[k] = [x,y,w,h,x+w*0.5,y+h*0.5,False]
-                        cv2.rectangle(frame,(x, y),(x+w,y+h),(0,0,255),1)
-                        cv2.putText(mask,"id:" + str(k), (x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 255)
-                    else:
+                        boxes[k] = [x, y, w, h, x+w*0.5, y+h*0.5, boxes[k][6], boxes[k][7]]
+                        currentKey = k;
+                    if (minDist >= 20):
                         boxId += 1
-                        boxes[boxId] = [x, y, w, h, cx, cy, False]
-                        cv2.rectangle(frame,(x, y),(x+w,y+h),(0,0,255),1)
-                        cv2.putText(mask,str(boxId), (x,y), cv2.FONT_HERSHEY_SIMPLEX, 2, 255)
-                
+                        boxes[boxId] = [x, y, w, h, cx, cy, 0, 0]
 
-        cv2.imshow("frame", frame)
+            if currentKey is not -1:
+                cv2.rectangle(frame,(x, y),(x+w,y+h),(0,0,255),1)
+                cv2.putText(frame,"id:" + str(currentKey), (x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))                        
+                if blue is not None:
+                    checkIntersection(blue, currentKey, frame, "blue")
+                if green is not None:
+                    checkIntersection(green, currentKey, frame, "green")      
+
+        cv2.imshow(path, frame)
         cv2.imshow("mask", mask)
         key = cv2.waitKey(25)
         if key == 27:
             break
-        
+       
     video.release()
     cv2.destroyAllWindows()
 
+def checkIntersection(line, key, frame, lineColor):
+    x, y, w, h, cx, cy, passedBlue, passedGreen = boxes[key]
+    #proverava se presek svih stranica kvadrata s kojim je uokvirena kontura
+    #sa linijom, pocevsi od gornje stranice u smeru kazaljke na satu
+    if lineLineIntersection([x, y, x+w, y], line) or  lineLineIntersection([x+w, y, x+w, y+h], line) or lineLineIntersection([x, y+h, x+w, y+h], line) or lineLineIntersection([x, y, x, y+h], line):
+        if lineColor is "blue" and passedBlue == 0:
+            print(boxes[key][6])
+            boxes[key][6] = 1
+            cv2.putText(frame,"PLAVA", (x,y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0))
+        if lineColor is "green" and passedGreen == 0:
+            boxes[key][7] = 1
+            cv2.putText(frame,"ZELENA", (x,y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0))
 
+
+
+def lineLineIntersection(l1, l2):
+    x1, y1, x2, y2 = l1
+    x3, y3, x4, y4 = l2 
+    a = (x1 - x3)*(y3 - y4) - (y1 - y3)*(x3 - x4)
+    b = (x1 - x2)*(y3 - y4) - (y1 - y2)*(x3 - x4)
+    k = a/b
+    if k>=0.0 and k<=1.0:
+        xp = x1 + k*(x2 - x1)
+        yp = y1 + k*(y2 - y1)
+        if xp>=min([x3,x4]) and xp<=max([x3,x4]) and yp>=min([y3,y4]) and yp<=max([y3,y4]):
+            return True 
+    return False     
+
+if __name__ == '__main__':
+    playVideo("proj-lvl3-data/video-0.avi")
+    #for filename in os.listdir("proj-lvl3-data"):
+     #   if filename.startswith("video-") and filename.endswith(".avi"):
+      #      playVideo("proj-lvl3-data/" + filename)
+            
+        
