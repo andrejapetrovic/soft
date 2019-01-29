@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import os
 from keras.preprocessing import image
+from keras import models
 
 boxes = {}
 sum = [0]
@@ -77,11 +78,16 @@ def playVideo(path, model):
 
             if currentKey is not -1:
                 #cv2.rectangle(frame,(x, y),(x+w,y+h),(0,0,255),1)
-                #cv2.putText(frame,"id:" + str(currentKey), (x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))                        
+                #cv2.putText(frame,"id:" + str(currentKey), (x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))
+                u = -1                        
                 if blue is not None:
-                    checkIntersection(blue, currentKey, frame, "blue", mask, model)
+                    blue2 = [blue[0]+u, blue[1]+5*u, blue[2]+5*u, blue[3]+u]
+                    cv2.line(frame, (blue2[0], blue2[1]), (blue2[2], blue2[3]), (255,255,0),2)
+                    checkIntersection(blue2, currentKey, frame, "blue", mask, model)
                 if green is not None:
-                    checkIntersection(green, currentKey, frame, "green", mask, model)      
+                    green2 = [green[0]+u, green[1]+5*u, green[2]+5*u, green[3]+u]
+                    cv2.line(frame, (green2[0], green2[1]), (green2[2], green2[3]), (255,255,0),2)
+                    checkIntersection(green2, currentKey, frame, "green", mask, model)      
 
         cv2.imshow(path, frame)
         #cv2.imshow("mask", mask)
@@ -90,13 +96,13 @@ def playVideo(path, model):
         if frame_count == num_of_frames or key == 27:
             video.release()
             cv2.destroyAllWindows()
+            print(path,"suma: ",sum[0])
             return sum[0]
             
 
 def checkIntersection(line, key, frame, lineColor, mask, model):
     x, y, w, h, cx, cy, passedBlue, passedGreen = boxes[key]
     #proverava se presek svih stranica kvadrata s kojim je uokvirena kontura
-    #sa linijom, pocevsi od gornje stranice u smeru kazaljke na satu
     if lineLineIntersection([x, y, x+w, y], line) or lineLineIntersection([x+w, y, x+w, y+h], line) or lineLineIntersection([x, y+h, x+w, y+h], line) or lineLineIntersection([x, y, x, y+h], line):
         if lineColor is "blue" and passedBlue == 0:
             boxes[key][6] = 1
@@ -115,6 +121,11 @@ def getPrediction(key, mask, model):
     x, y, w, h, _,_,_,_ = boxes[key]
     n = 5
     img = mask[y-n:y+h+n, x-n:x+w+n]
+    rows, cols = img.shape
+    img[0: n] = 0
+    img[rows - n: rows] = 0
+    img[:, 0: n] = 0
+    img[:, cols-n: cols] = 0
     cv2.imshow("cropped", img)
     img = cv2.resize(img, (28, 28), interpolation = cv2.INTER_NEAREST)
     img = img/255
@@ -143,7 +154,7 @@ def lineLineIntersection(l1, l2):
     return False     
 
 if __name__ == '__main__':
-    playVideo("proj-lvl3-data/video-3.avi")
-    #playVideo("proj-lvl3-data/video-0.avi")
+    model = models.load_model('model2.h5')
+    playVideo("proj-lvl3-data/video-9.avi", model)
             
         
