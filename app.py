@@ -1,9 +1,10 @@
 import cv2
 import numpy as np
 import os
+from keras.preprocessing import image
 
 boxes = {}
-sum = 0
+sum = [0]
 
 def findLine(lowerColor, upperColor, frame):       
     mask = cv2.inRange(frame, lowerColor, upperColor)
@@ -18,13 +19,13 @@ def findLine(lowerColor, upperColor, frame):
             #cv2.line(frame, (x1,y1), (x2,y2), (255,255,0),2)
             return [x1, y1, x2, y2]
     
-def playVideo(path):
+def playVideo(path, model):
     video = cv2.VideoCapture(path)
     
     frame_count = 0
     num_of_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    sum = 0 
+    sum[0] = 0 
     boxes.clear()
 
     boxId = 0
@@ -43,7 +44,7 @@ def playVideo(path):
         image = cv2.bitwise_and(src1=frame, src2=frame, mask=mask)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        contours, hierarchy = cv2.findContours(blur, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        _, contours, hierarchy = cv2.findContours(blur, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         #cv2.drawContours(frame, contours, -1, (255,0,0), 2)
         for contour in contours:
             currentKey = -1;
@@ -58,7 +59,7 @@ def playVideo(path):
                     boxId += 1
                     #[id] = [x, y, sirina, visina, centar-x, centar-y, presekao plavu, presekao zelenu]
                     boxes[boxId] = [x, y, w, h, cx, cy, 0, 0]
-                    currentKey = boxId;
+                    currentKey = boxId
                 else:
                     for key in boxes:
                         box = boxes[key]
@@ -66,21 +67,21 @@ def playVideo(path):
                 
                     minDist = min(dists.values())
                         
-                    if (minDist < 20 and minDist>5):
+                    if (minDist < 20 and minDist>2):
                         k = (list(dists.keys())[list(dists.values()).index(minDist)])
                         boxes[k] = [x, y, w, h, x+w*0.5, y+h*0.5, boxes[k][6], boxes[k][7]]
-                        currentKey = k;
+                        currentKey = k
                     if (minDist >= 20):
                         boxId += 1
                         boxes[boxId] = [x, y, w, h, cx, cy, 0, 0]
 
             if currentKey is not -1:
-                cv2.rectangle(frame,(x, y),(x+w,y+h),(0,0,255),1)
-                cv2.putText(frame,"id:" + str(currentKey), (x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))                        
+                #cv2.rectangle(frame,(x, y),(x+w,y+h),(0,0,255),1)
+                #cv2.putText(frame,"id:" + str(currentKey), (x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))                        
                 if blue is not None:
-                    checkIntersection(blue, currentKey, frame, "blue")
+                    checkIntersection(blue, currentKey, frame, "blue", mask, model)
                 if green is not None:
-                    checkIntersection(green, currentKey, frame, "green")      
+                    checkIntersection(green, currentKey, frame, "green", mask, model)      
 
         cv2.imshow(path, frame)
         #cv2.imshow("mask", mask)
@@ -89,21 +90,42 @@ def playVideo(path):
         if frame_count == num_of_frames or key == 27:
             video.release()
             cv2.destroyAllWindows()
-            return True
+            return sum[0]
             
 
-def checkIntersection(line, key, frame, lineColor):
+def checkIntersection(line, key, frame, lineColor, mask, model):
     x, y, w, h, cx, cy, passedBlue, passedGreen = boxes[key]
     #proverava se presek svih stranica kvadrata s kojim je uokvirena kontura
     #sa linijom, pocevsi od gornje stranice u smeru kazaljke na satu
     if lineLineIntersection([x, y, x+w, y], line) or lineLineIntersection([x+w, y, x+w, y+h], line) or lineLineIntersection([x, y+h, x+w, y+h], line) or lineLineIntersection([x, y, x, y+h], line):
         if lineColor is "blue" and passedBlue == 0:
             boxes[key][6] = 1
-            cv2.putText(frame,"PLAVA", (x,y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0))
+            n = getPrediction(key, mask, model)
+            print("sum=",sum[0],"+",n)
+            sum[0] += n
+            print("sum=",sum[0])
         if lineColor is "green" and passedGreen == 0:
             boxes[key][7] = 1
-            cv2.putText(frame,"ZELENA", (x,y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0))
+            n = getPrediction(key, mask, model)
+            print("sum=",sum[0],"-",n)
+            sum[0] -= n
+            print("sum=",sum[0])
 
+def getPrediction(key, mask, model):
+    x, y, w, h, _,_,_,_ = boxes[key]
+    n = 5
+    img = mask[y-n:y+h+n, x-n:x+w+n]
+    cv2.imshow("cropped", img)
+    img = cv2.resize(img, (28, 28), interpolation = cv2.INTER_NEAREST)
+    img = img/255
+    im2arr = np.array(img)
+    im2arr = im2arr.reshape(1,28,28,1)
+
+    pred = model.predict(im2arr)
+    prob = np.max(pred)
+    num = np.argmax(pred)
+    print("number: ",num,"probability: ",prob)
+    return num
 
 
 def lineLineIntersection(l1, l2):
@@ -115,7 +137,8 @@ def lineLineIntersection(l1, l2):
     if k>=0.0 and k<=1.0:
         xp = x1 + k*(x2 - x1)
         yp = y1 + k*(y2 - y1)
-        if xp>=min([x3,x4]) and xp<=max([x3,x4]) and yp>=min([y3,y4]) and yp<=max([y3,y4]):
+        u = 2
+        if xp>=min([x3,x4])+u and xp<=max([x3,x4])-u and yp>=min([y3,y4])+u and yp<=max([y3,y4])-u:
             return True 
     return False     
 

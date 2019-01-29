@@ -1,4 +1,4 @@
-RA 158/2014 Andreja Petrovicfile	sum
+RA 158/2014 Andreja Petrovic file	sum
 video-0.avi	0
 video-1.avi	0
 video-2.avi	0
