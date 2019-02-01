@@ -13,12 +13,13 @@ def findLine(lowerColor, upperColor, frame):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     edges = cv2.Canny(cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)[1], 100, 250)
 
-    blur = cv2.GaussianBlur(edges, (5, 5), 0)
+    blur = cv2.GaussianBlur(edges, (7, 7), 0)
     lines = cv2.HoughLinesP(blur, 1, np.pi/180, 100, 175, 200)
     if lines is not None:
         for x1, y1, x2, y2 in lines[0]:
             #cv2.line(frame, (x1,y1), (x2,y2), (255,255,0),2)
-            return [x1, y1, x2, y2]
+            return [True, [x1, y1, x2, y2]]
+    return [False, None]
     
 def playVideo(path, model):
     video = cv2.VideoCapture(path)
@@ -28,17 +29,20 @@ def playVideo(path, model):
 
     sum[0] = 0 
     boxes.clear()
-
+    detectedBlue = False
+    detectedGreen = False
     boxId = 0
     while True:
         ret, frame = video.read()
 
         frame_count += 1
 
-        #plava linija - koordinate [x1, y1, x2, y2]
-        blue = findLine(np.array([120, 0, 0]), np.array([255, 100, 100]), frame)
-        #zelena
-        green = findLine(np.array([0, 130, 0]), np.array([59, 255, 50]), frame)
+        if not detectedBlue:
+            #plava linija - koordinate [x1, y1, x2, y2]
+            detectedBlue, blue = findLine(np.array([120, 0, 0]), np.array([255, 100, 100]), frame)
+        if not detectedGreen:
+            #zelena
+            detectedGreen, green = findLine(np.array([0, 130, 0]), np.array([59, 255, 50]), frame)
 
         #konture  
         mask = cv2.inRange(frame, np.array([160, 160, 160]), np.array([255, 255, 255]))
@@ -130,7 +134,7 @@ def getPrediction(key, mask, model):
     img = cv2.resize(img, (28, 28), interpolation = cv2.INTER_NEAREST)
     img = img/255
     im2arr = np.array(img)
-    im2arr = im2arr.reshape(1,28,28,1)
+    im2arr = im2arr.reshape(1,1,28,28)
 
     pred = model.predict(im2arr)
     prob = np.max(pred)
